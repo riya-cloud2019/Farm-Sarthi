@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="{{ selected_language }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ labels.title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <main class="page-shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow" id="hero-eyebrow">Vernacular AI Agriculture Platform</p>
+                <h1 id="hero-title">{{ labels.title }}</h1>
+                <p class="subtitle" id="hero-subtitle">{{ labels.subtitle }}</p>
+                <div class="hero-tags">
+                    <span id="hero-tag-1">India-wide district selector</span>
+                    <span id="hero-tag-2">ML crop intelligence</span>
+                    <span id="hero-tag-3">Voice-ready farmer input</span>
+                </div>
+            </div>
+
+            <div class="hero-stats">
+                <article class="stat-card">
+                    <span id="coverage-label">Coverage</span>
+                    <strong id="coverage-value">{{ states|length }} States / UTs</strong>
+                    <p id="coverage-note">Updated India-wide location coverage for demo selection.</p>
+                </article>
+                <article class="stat-card">
+                    <span id="districts-label">Districts</span>
+                    <strong>{{ districts|length }}</strong>
+                    <p id="districts-note">District picker updates instantly when a state is selected.</p>
+                </article>
+                <article class="stat-card">
+                    <span id="advisory-label">Advisory</span>
+                    <strong id="advisory-value">Crop, alerts, irrigation, fertilizer</strong>
+                    <p id="advisory-note">One workflow for multilingual analysis and decision support.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="control-panel">
+            <div class="panel-head">
+                <div>
+                    <p class="eyebrow" id="field-input-label">Field Input</p>
+                    <h2 id="panel-heading">Analyze local farm conditions</h2>
+                </div>
+                <p class="panel-copy" id="panel-copy">Select the language, then choose a state and district. The district list changes automatically so the selector stays manageable even with full India coverage.</p>
+            </div>
+
+            <form id="analysis-form" class="form-grid">
+                <label class="field">
+                    <span>{{ labels.language }}</span>
+                    <select name="language" id="language-select">
+                        {% for code, text in languages.items() %}
+                        <option value="{{ code }}" {% if code == selected_language %}selected{% endif %}>{{ language_names[code] }} ({{ code.upper() }})</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span>{{ labels.state }}</span>
+                    <select name="state" id="state-select">
+                        <option value="">{{ labels.select_state }}</option>
+                        {% for state in states %}
+                        <option value="{{ state }}">{{ state }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+
+                <label class="field">
+                    <span>{{ labels.district }}</span>
+                    <select name="district" id="district-select">
+                        <option value="">{{ labels.select_district }}</option>
+                    </select>
+                </label>
+
+                <label class="field field-wide">
+                    <span>{{ labels.crop_interest }}</span>
+                    <input type="text" id="crop-interest" name="crop_interest" placeholder="{{ labels.placeholder }}">
+                </label>
+
+                <div class="voice-panel">
+                    <button type="button" class="voice-btn" id="voice-btn">{{ labels.voice }}</button>
+                    <p id="voice-help">Browser speech capture fills the crop-interest field using the selected language.</p>
+                </div>
+
+                <div class="action-band field-wide">
+                    <button type="submit" class="submit-btn" id="analyze-btn">{{ labels.analyze }}</button>
+                    <div class="action-meta">
+                        <div class="meta-pill" id="coverage-pill">{{ states|length }} states / UTs loaded</div>
+                        <div class="meta-pill" id="district-count-pill">0 districts in selected state</div>
+                    </div>
+                </div>
+            </form>
+
+            <div class="status-line" id="status-line"></div>
+        </section>
+
+        <section class="results hidden" id="results">
+            <div class="results-head">
+                <div>
+                    <p class="eyebrow" id="overview-label">{{ labels.overview }}</p>
+                    <h2 id="results-title">{{ labels.results }}</h2>
+                </div>
+                <div class="score-badge" id="decision-score">{{ labels.impact }}: 0/100</div>
+            </div>
+
+            <div class="overview-grid" id="overview-strip"></div>
+
+            <div class="results-grid">
+                <article class="result-card recommendation-card">
+                    <div class="card-head">
+                        <h3 id="top-crops-title">{{ labels.top_crops }}</h3>
+                    </div>
+                    <ul id="top-crops-list" class="recommendation-list"></ul>
+                </article>
+
+                <article class="result-card advisory-card">
+                    <div class="advisory-block">
+                        <h3 id="irrigation-title">{{ labels.irrigation }}</h3>
+                        <p id="irrigation-text"></p>
+                    </div>
+                    <div class="advisory-block">
+                        <h3 id="fertilizer-title">{{ labels.fertilizer }}</h3>
+                        <p id="fertilizer-text"></p>
+                    </div>
+                </article>
+
+                <article class="result-card alert-card">
+                    <h3 id="alerts-title">{{ labels.alerts }}</h3>
+                    <ul id="alerts-list" class="alert-list"></ul>
+                </article>
+            </div>
+
+            <article class="result-card model-card">
+                <div class="card-head">
+                    <h3 id="model-title">{{ labels.model }}</h3>
+                    <span class="subtle-chip" id="model-chip">Synthetic district agronomy + trained crop classifier</span>
+                </div>
+                <div class="model-grid" id="model-grid"></div>
+            </article>
+        </section>
+    </main>
+
+    <script>
+        const labelsByLanguage = {{ languages|tojson }};
+        const districtsByState = {{ districts|tojson }};
+        const uiText = {
+            en: {heroEyebrow:"Vernacular AI Agriculture Platform",heroTag1:"India-wide district selector",heroTag2:"ML crop intelligence",heroTag3:"Voice-ready farmer input",coverage:"Coverage",coverageNote:"Updated India-wide location coverage for demo selection.",districts:"Districts",districtsNote:"District picker updates instantly when a state is selected.",advisory:"Advisory",advisoryValue:"Crop, alerts, irrigation, fertilizer",advisoryNote:"One workflow for multilingual analysis and decision support.",fieldInput:"Field Input",panelHeading:"Analyze local farm conditions",panelCopy:"Select the language, then choose a state and district. The district list changes automatically so the selector stays manageable even with full India coverage.",voiceHelp:"Browser speech capture fills the crop-interest field using the selected language.",statesLoaded:"states / UTs loaded",districtsInState:"districts in selected state",modelChip:"Synthetic district agronomy + trained crop classifier",soil:"Soil",temperature:"Temperature",rainfall:"Rainfall",humidity:"Humidity",season:"Season",algorithm:"Algorithm",validationAccuracy:"Validation Accuracy",trainingRows:"Training Rows",districtDataset:"District Dataset",voiceNotSupported:"Voice input works in recent Chrome or Edge versions. Please open the app there and allow microphone access.",listeningPrompt:"Listening... speak the crop name clearly.",voiceCaptured:"Voice input captured.",stopListening:"Stop Listening",micNotSupported:"Microphone access is not supported in this browser.",micDenied:"Microphone permission was denied. Please allow microphone access and try again.",serviceBlocked:"Speech service is blocked in this browser session.",noSpeech:"No speech was detected. Try again and speak a little louder.",noMicrophone:"No microphone was detected on this device.",networkError:"Speech recognition network access failed. Check your internet connection.",langNotSupported:"The selected language is not supported for browser speech recognition.",voiceFailed:"Voice input could not be captured. Please try again.",analysisFailed:"Analysis failed."},
+            hi: {heroEyebrow:"क्षेत्रीय एआई कृषि मंच",heroTag1:"पूरे भारत का जिला चयन",heroTag2:"एमएल फसल विश्लेषण",heroTag3:"वॉइस इनपुट समर्थित",coverage:"कवरेज",coverageNote:"डेमो चयन के लिए पूरे भारत की अद्यतन लोकेशन कवरेज।",districts:"जिले",districtsNote:"राज्य चुनते ही जिला सूची तुरंत बदलती है।",advisory:"सलाह",advisoryValue:"फसल, अलर्ट, सिंचाई, उर्वरक",advisoryNote:"बहुभाषी विश्लेषण और निर्णय सहायता के लिए एकीकृत कार्यप्रवाह।",fieldInput:"फील्ड इनपुट",panelHeading:"स्थानीय खेती की स्थिति का विश्लेषण करें",panelCopy:"भाषा चुनें, फिर राज्य और जिला चुनें। पूर्ण भारत कवरेज होने पर भी जिला सूची स्वचालित रूप से बदलती है।",voiceHelp:"ब्राउज़र स्पीच कैप्चर चुनी गई भाषा में फसल रुचि भरता है।",statesLoaded:"राज्य / केंद्रशासित प्रदेश लोड हुए",districtsInState:"चुने गए राज्य में जिले",modelChip:"सिंथेटिक जिला कृषि-प्रोफाइल + प्रशिक्षित फसल क्लासिफायर",soil:"मिट्टी",temperature:"तापमान",rainfall:"वर्षा",humidity:"आर्द्रता",season:"मौसम",algorithm:"एल्गोरिद्म",validationAccuracy:"वैलिडेशन एक्युरेसी",trainingRows:"ट्रेनिंग पंक्तियाँ",districtDataset:"जिला डेटासेट",voiceNotSupported:"वॉइस इनपुट हाल के Chrome या Edge में काम करता है। कृपया वहीं खोलें और माइक्रोफोन अनुमति दें।",listeningPrompt:"सुन रहे हैं... कृपया फसल का नाम साफ़ बोलें।",voiceCaptured:"वॉइस इनपुट प्राप्त हुआ।",stopListening:"सुनना बंद करें",micNotSupported:"इस ब्राउज़र में माइक्रोफोन एक्सेस उपलब्ध नहीं है।",micDenied:"माइक्रोफोन अनुमति अस्वीकार कर दी गई। कृपया अनुमति दें और फिर प्रयास करें।",serviceBlocked:"इस ब्राउज़र सत्र में स्पीच सेवा अवरुद्ध है।",noSpeech:"कोई आवाज़ नहीं मिली। फिर प्रयास करें और थोड़ा ज़ोर से बोलें।",noMicrophone:"इस डिवाइस पर कोई माइक्रोफोन नहीं मिला।",networkError:"स्पीच रिकग्निशन नेटवर्क विफल हुआ। कृपया इंटरनेट जांचें।",langNotSupported:"चुनी गई भाषा इस ब्राउज़र स्पीच रिकग्निशन में समर्थित नहीं है।",voiceFailed:"वॉइस इनपुट प्राप्त नहीं हो सका। कृपया फिर प्रयास करें।",analysisFailed:"विश्लेषण विफल हुआ।"},
+            te: {heroEyebrow:"ప్రాంతీయ ఏఐ వ్యవసాయ వేదిక",heroTag1:"భారతవ్యాప్తంగా జిల్లా ఎంపిక",heroTag2:"ఎంఎల్ పంట విశ్లేషణ",heroTag3:"వాయిస్ ఇన్‌పుట్ సిద్ధంగా ఉంది",coverage:"వ్యాప్తి",coverageNote:"డెమో ఎంపిక కోసం భారతవ్యాప్తంగా నవీకరించిన స్థానం కవరేజ్.",districts:"జిల్లాలు",districtsNote:"రాష్ట్రం ఎంచుకున్న వెంటనే జిల్లా జాబితా మారుతుంది.",advisory:"సలహాలు",advisoryValue:"పంట, అలర్ట్స్, పారుదల, ఎరువు",advisoryNote:"బహుభాషా విశ్లేషణ మరియు నిర్ణయ సహాయానికి ఒకే వర్క్‌ఫ్లో.",fieldInput:"ఫీల్డ్ ఇన్‌పుట్",panelHeading:"స్థానిక వ్యవసాయ పరిస్థితులను విశ్లేషించండి",panelCopy:"ముందు భాషను, తర్వాత రాష్ట్రం మరియు జిల్లాను ఎంచుకోండి. భారతవ్యాప్తంగా డేటా ఉన్నా జిల్లా జాబితా సులభంగా మారుతుంది.",voiceHelp:"ఎంచుకున్న భాషలో బ్రౌజర్ వాయిస్ క్యాప్చర్ పంట ఆసక్తి బాక్స్‌ను నింపుతుంది.",statesLoaded:"రాష్ట్రాలు / కేంద్ర పాలిత ప్రాంతాలు లోడ్ అయ్యాయి",districtsInState:"ఎంచుకున్న రాష్ట్రంలోని జిల్లాలు",modelChip:"సింథటిక్ జిల్లా వ్యవసాయ ప్రొఫైల్ + శిక్షణ పొందిన పంట క్లాసిఫైయర్",soil:"మట్టి",temperature:"ఉష్ణోగ్రత",rainfall:"వర్షపాతం",humidity:"ఆర్ద్రత",season:"సీజన్",algorithm:"అల్గారిథమ్",validationAccuracy:"వాలిడేషన్ ఖచ్చితత్వం",trainingRows:"ట్రైనింగ్ వరుసలు",districtDataset:"జిల్లా డేటాసెట్",voiceNotSupported:"వాయిస్ ఇన్‌పుట్ తాజా Chrome లేదా Edge లో పనిచేస్తుంది. దయచేసి అక్కడ ఓపెన్ చేసి మైక్రోఫోన్ అనుమతి ఇవ్వండి.",listeningPrompt:"వింటోంది... దయచేసి పంట పేరును స్పష్టంగా చెప్పండి.",voiceCaptured:"వాయిస్ ఇన్‌పుట్ అందింది.",stopListening:"వినడం ఆపు",micNotSupported:"ఈ బ్రౌజర్‌లో మైక్రోఫోన్ యాక్సెస్ అందుబాటులో లేదు.",micDenied:"మైక్రోఫోన్ అనుమతి తిరస్కరించబడింది. దయచేసి అనుమతించి మళ్లీ ప్రయత్నించండి.",serviceBlocked:"ఈ బ్రౌజర్ సెషన్‌లో స్పీచ్ సర్వీస్ నిరోధించబడింది.",noSpeech:"ఏ శబ్దం గుర్తించబడలేదు. మళ్లీ ప్రయత్నించి కొంచెం గట్టిగా మాట్లాడండి.",noMicrophone:"ఈ పరికరంలో మైక్రోఫోన్ కనిపించలేదు.",networkError:"స్పీచ్ రికగ్నిషన్ నెట్‌వర్క్ లోపం. దయచేసి ఇంటర్నెట్‌ను తనిఖీ చేయండి.",langNotSupported:"ఎంచుకున్న భాషకు ఈ బ్రౌజర్‌లో స్పీచ్ రికగ్నిషన్ మద్దతు లేదు.",voiceFailed:"వాయిస్ ఇన్‌పుట్ అందలేదు. దయచేసి మళ్లీ ప్రయత్నించండి.",analysisFailed:"విశ్లేషణ విఫలమైంది."},
+            ta: {heroEyebrow:"மொழி ஆதரவு ஏஐ வேளாண்மை தளம்",heroTag1:"இந்தியா முழுவதும் மாவட்ட தேர்வு",heroTag2:"எம்எல் பயிர் பகுப்பாய்வு",heroTag3:"குரல் உள்ளீடு தயாராக உள்ளது",coverage:"கவரேஜ்",coverageNote:"டெமோ தேர்வுக்கான இந்தியா முழு இடத் தரவு.",districts:"மாவட்டங்கள்",districtsNote:"மாநிலம் தேர்ந்தெடுத்தவுடன் மாவட்ட பட்டியல் உடனே மாறும்.",advisory:"ஆலோசனை",advisoryValue:"பயிர், எச்சரிக்கை, நீர்ப்பாசனம், உரம்",advisoryNote:"பன்மொழி பகுப்பாய்வு மற்றும் முடிவு உதவிக்கான ஒரே பணி ஓட்டம்.",fieldInput:"புல உள்ளீடு",panelHeading:"உள்ளூர் விவசாய நிலைகளை பகுப்பாய்வு செய்யுங்கள்",panelCopy:"முதலில் மொழியை, பின்னர் மாநிலமும் மாவட்டமும் தேர்ந்தெடுக்கவும். முழு இந்தியா கவரேஜ் இருந்தாலும் மாவட்ட பட்டியல் தானாக மாறும்.",voiceHelp:"தேர்ந்தெடுத்த மொழியில் குரல் பிடிப்பு பயிர் விருப்பத்தை நிரப்பும்.",statesLoaded:"மாநிலங்கள் / யூனியன் பிரதேசங்கள் ஏற்றப்பட்டன",districtsInState:"தேர்ந்தெடுத்த மாநிலத்தின் மாவட்டங்கள்",modelChip:"செயற்கை மாவட்ட வேளாண் சுயவிவரம் + பயிற்சி பெற்ற பயிர் வகைப்பான்",soil:"மண்",temperature:"வெப்பநிலை",rainfall:"மழை",humidity:"ஈரப்பதம்",season:"பருவம்",algorithm:"அல்காரிதம்",validationAccuracy:"சரிபார்ப்பு துல்லியம்",trainingRows:"பயிற்சி வரிகள்",districtDataset:"மாவட்ட தரவுத்தொகுப்பு",voiceNotSupported:"குரல் உள்ளீடு சமீபத்திய Chrome அல்லது Edge-ல் வேலை செய்யும். அங்கு திறந்து மைக்ரோஃபோன் அனுமதி வழங்கவும்.",listeningPrompt:"கேட்கப்படுகிறது... தயவுசெய்து பயிர் பெயரை தெளிவாக சொல்லுங்கள்.",voiceCaptured:"குரல் உள்ளீடு பெறப்பட்டது.",stopListening:"கேட்பதை நிறுத்து",micNotSupported:"இந்த உலாவியில் மைக்ரோஃபோன் அணுகல் இல்லை.",micDenied:"மைக்ரோஃபோன் அனுமதி மறுக்கப்பட்டது. தயவுசெய்து அனுமதி வழங்கி மீண்டும் முயற்சிக்கவும்.",serviceBlocked:"இந்த உலாவி அமர்வில் குரல் சேவை தடைசெய்யப்பட்டுள்ளது.",noSpeech:"ஒலி கண்டறியப்படவில்லை. மீண்டும் முயற்சி செய்து கொஞ்சம் சத்தமாக பேசுங்கள்.",noMicrophone:"இந்த சாதனத்தில் மைக்ரோஃபோன் கிடைக்கவில்லை.",networkError:"குரல் அங்கீகார நெட்வொர்க் தோல்வி. இணையத்தைச் சரிபார்க்கவும்.",langNotSupported:"தேர்ந்தெடுத்த மொழிக்கு இந்த உலாவியில் குரல் அங்கீகாரம் ஆதரிக்கப்படவில்லை.",voiceFailed:"குரல் உள்ளீடு பெற முடியவில்லை. மீண்டும் முயற்சிக்கவும்.",analysisFailed:"பகுப்பாய்வு தோல்வியடைந்தது."}
+        };
+
+        const form = document.getElementById("analysis-form");
+        const analyzeButton = document.getElementById("analyze-btn");
+        const languageSelect = document.getElementById("language-select");
+        const stateSelect = document.getElementById("state-select");
+        const districtSelect = document.getElementById("district-select");
+        const cropInterestInput = document.getElementById("crop-interest");
+        const voiceButton = document.getElementById("voice-btn");
+        const statusLine = document.getElementById("status-line");
+        const resultsSection = document.getElementById("results");
+        const topCropsList = document.getElementById("top-crops-list");
+        const alertsList = document.getElementById("alerts-list");
+        const irrigationText = document.getElementById("irrigation-text");
+        const fertilizerText = document.getElementById("fertilizer-text");
+        const decisionScore = document.getElementById("decision-score");
+        const overviewStrip = document.getElementById("overview-strip");
+        const modelGrid = document.getElementById("model-grid");
+        const districtCountPill = document.getElementById("district-count-pill");
+        let activeRecognition = null;
+        let isListening = false;
+        let latestAnalysis = null;
+        const totalStates = new Set(districtsByState.map(item => item.state)).size;
+
+        function selectedLabels() {
+            return labelsByLanguage[languageSelect.value] || labelsByLanguage.en;
+        }
+
+        function selectedUiText() {
+            return uiText[languageSelect.value] || uiText.en;
+        }
+
+        function setStatus(message, isError = false) {
+            statusLine.textContent = message;
+            statusLine.className = isError ? "status-line error" : "status-line";
+        }
+
+        function setText(id, value) {
+            const node = document.getElementById(id);
+            if (node) {
+                node.textContent = value;
+            }
+        }
+
+        function metricCard(label, value) {
+            return `
+                <article class="overview-card">
+                    <span>${label}</span>
+                    <strong>${value}</strong>
+                </article>
+            `;
+        }
+
+        function populateDistricts(selectedState, selectedDistrict = "") {
+            const labels = selectedLabels();
+            districtSelect.innerHTML = `<option value="">${labels.select_district}</option>`;
+
+            const matches = districtsByState
+                .filter(item => item.state === selectedState)
+                .sort((a, b) => a.district.localeCompare(b.district));
+
+            matches.forEach(item => {
+                const option = document.createElement("option");
+                option.value = item.district;
+                option.textContent = item.district;
+                if (item.district === selectedDistrict) {
+                    option.selected = true;
+                }
+                districtSelect.appendChild(option);
+            });
+
+            districtCountPill.textContent = `${matches.length} ${selectedUiText().districtsInState}`;
+        }
+
+        function renderResults(data) {
+            const labels = selectedLabels();
+            const ui = selectedUiText();
+            latestAnalysis = data;
+
+            decisionScore.textContent = `${labels.impact}: ${data.decision_score}/100`;
+            irrigationText.textContent = data.irrigation_advice;
+            fertilizerText.textContent = data.fertilizer_advice;
+
+            overviewStrip.innerHTML = [
+                metricCard(labels.state, data.district.state),
+                metricCard(labels.district, data.district.name),
+                metricCard(ui.soil, data.district.soil),
+                metricCard(ui.temperature, `${data.district.temperature} °C`),
+                metricCard(ui.rainfall, `${data.district.rainfall_forecast} mm`),
+                metricCard(ui.humidity, `${data.district.humidity}%`),
+                metricCard("pH", data.district.ph),
+                metricCard(ui.season, data.district.season)
+            ].join("");
+
+            topCropsList.innerHTML = data.top_crops.map(item => `
+                <li class="crop-item">
+                    <div class="crop-head">
+                        <div>
+                            <strong>${item.crop}</strong>
+                            <p>${item.reasons.join(" ")}</p>
+                        </div>
+                        <span class="mini-score">${item.score}/100</span>
+                    </div>
+                </li>
+            `).join("");
+
+            alertsList.innerHTML = data.alerts.map(alert => `<li>${alert}</li>`).join("");
+
+            modelGrid.innerHTML = `
+                <div class="model-stat">
+                    <span>${ui.algorithm}</span>
+                    <strong>${data.model_summary.algorithm}</strong>
+                </div>
+                <div class="model-stat">
+                    <span>${ui.validationAccuracy}</span>
+                    <strong>${data.model_summary.accuracy}%</strong>
+                </div>
+                <div class="model-stat">
+                    <span>${ui.trainingRows}</span>
+                    <strong>${data.model_summary.training_rows}</strong>
+                </div>
+                <div class="model-stat">
+                    <span>${ui.districtDataset}</span>
+                    <strong>${data.model_summary.districts_loaded}</strong>
+                </div>
+            `;
+
+            resultsSection.classList.remove("hidden");
+            resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function setVoiceButtonState(listening) {
+            isListening = listening;
+            voiceButton.classList.toggle("listening", listening);
+            voiceButton.textContent = listening ? selectedUiText().stopListening : selectedLabels().voice;
+        }
+
+        async function ensureMicrophoneAccess() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error(selectedUiText().micNotSupported);
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+        }
+
+        form.addEventListener("submit", async function(event) {
+            event.preventDefault();
+
+            const labels = selectedLabels();
+            if (!stateSelect.value) {
+                setStatus(labels.select_state, true);
+                return;
+            }
+            if (!districtSelect.value) {
+                setStatus(labels.select_district, true);
+                return;
+            }
+
+            analyzeButton.disabled = true;
+            analyzeButton.textContent = labels.loading;
+            setStatus(labels.loading);
+
+            try {
+                const response = await fetch("/analyze", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        language: languageSelect.value,
+                        state: stateSelect.value,
+                        district: districtSelect.value,
+                        crop_interest: cropInterestInput.value
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || selectedUiText().analysisFailed);
+                }
+
+                renderResults(data);
+                setStatus(labels.success);
+            } catch (error) {
+                resultsSection.classList.add("hidden");
+                setStatus(error.message, true);
+            } finally {
+                analyzeButton.disabled = false;
+                analyzeButton.textContent = selectedLabels().analyze;
+            }
+        });
+
+        function applyTranslations() {
+            const labels = selectedLabels();
+            const ui = selectedUiText();
+            document.documentElement.lang = languageSelect.value;
+            document.title = labels.title;
+            setText("hero-eyebrow", ui.heroEyebrow);
+            setText("hero-title", labels.title);
+            setText("hero-subtitle", labels.subtitle);
+            setText("hero-tag-1", ui.heroTag1);
+            setText("hero-tag-2", ui.heroTag2);
+            setText("hero-tag-3", ui.heroTag3);
+            setText("coverage-label", ui.coverage);
+            setText("coverage-value", `${totalStates} States / UTs`);
+            setText("coverage-note", ui.coverageNote);
+            setText("districts-label", ui.districts);
+            setText("districts-note", ui.districtsNote);
+            setText("advisory-label", ui.advisory);
+            setText("advisory-value", ui.advisoryValue);
+            setText("advisory-note", ui.advisoryNote);
+            setText("field-input-label", ui.fieldInput);
+            setText("panel-heading", ui.panelHeading);
+            setText("panel-copy", ui.panelCopy);
+            document.querySelectorAll(".field span")[0].textContent = labels.language;
+            document.querySelectorAll(".field span")[1].textContent = labels.state;
+            document.querySelectorAll(".field span")[2].textContent = labels.district;
+            document.querySelectorAll(".field span")[3].textContent = labels.crop_interest;
+            cropInterestInput.placeholder = labels.placeholder;
+            if (!isListening) {
+                voiceButton.textContent = labels.voice;
+            }
+            setText("voice-help", ui.voiceHelp);
+            analyzeButton.textContent = labels.analyze;
+            setText("coverage-pill", `${totalStates} ${ui.statesLoaded}`);
+            setText("top-crops-title", labels.top_crops);
+            setText("irrigation-title", labels.irrigation);
+            setText("fertilizer-title", labels.fertilizer);
+            setText("alerts-title", labels.alerts);
+            setText("model-title", labels.model);
+            setText("model-chip", ui.modelChip);
+            setText("overview-label", labels.overview);
+            setText("results-title", labels.results);
+            if (latestAnalysis) {
+                renderResults(latestAnalysis);
+            } else {
+                populateDistricts(stateSelect.value, districtSelect.value);
+                decisionScore.textContent = `${labels.impact}: 0/100`;
+            }
+        }
+
+        languageSelect.addEventListener("change", function() {
+            applyTranslations();
+            setStatus("");
+        });
+
+        stateSelect.addEventListener("change", function() {
+            populateDistricts(stateSelect.value);
+            setStatus("");
+        });
+
+        voiceButton.addEventListener("click", async function() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                setStatus(selectedUiText().voiceNotSupported, true);
+                return;
+            }
+
+            if (isListening && activeRecognition) {
+                activeRecognition.stop();
+                return;
+            }
+
+            const languageMap = {
+                en: "en-IN",
+                hi: "hi-IN",
+                te: "te-IN",
+                ta: "ta-IN",
+                mr: "mr-IN",
+                kn: "kn-IN",
+                pa: "pa-IN",
+                bn: "bn-IN",
+                gu: "gu-IN",
+                ml: "ml-IN"
+            };
+
+            try {
+                await ensureMicrophoneAccess();
+
+                const recognition = new SpeechRecognition();
+                activeRecognition = recognition;
+                recognition.lang = languageMap[languageSelect.value] || "en-IN";
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = function() {
+                    setVoiceButtonState(true);
+                    setStatus(selectedUiText().listeningPrompt);
+                };
+
+                recognition.onresult = function(event) {
+                    let transcript = "";
+                    for (let i = event.resultIndex; i < event.results.length; i += 1) {
+                        transcript += event.results[i][0].transcript;
+                    }
+                    cropInterestInput.value = transcript.trim();
+                };
+
+                recognition.onerror = function(event) {
+                    const errors = {
+                        "not-allowed": selectedUiText().micDenied,
+                        "service-not-allowed": selectedUiText().serviceBlocked,
+                        "no-speech": selectedUiText().noSpeech,
+                        "audio-capture": selectedUiText().noMicrophone,
+                        "network": selectedUiText().networkError,
+                        "language-not-supported": selectedUiText().langNotSupported
+                    };
+                    setStatus(errors[event.error] || selectedUiText().voiceFailed, true);
+                };
+
+                recognition.onend = function() {
+                    setVoiceButtonState(false);
+                    activeRecognition = null;
+                    if (cropInterestInput.value.trim()) {
+                        setStatus(selectedUiText().voiceCaptured);
+                    }
+                };
+
+                recognition.start();
+            } catch (error) {
+                setVoiceButtonState(false);
+                activeRecognition = null;
+                setStatus(error.message || selectedUiText().micNotSupported, true);
+            }
+        });
+
+        stateSelect.value = "{{ states[0] if states else '' }}";
+        populateDistricts(stateSelect.value);
+        applyTranslations();
+    </script>
+</body>
+</html>
